@@ -39,28 +39,57 @@ class RelationshipCountConstraint(RelationshipManagerConstraintInterface):
         #    new relationship, need to check if the schema on the other side has a max_count defined
         # peer_ids_present_database_only:
         #    relationship to be deleted, need to check if the schema on the other side has a min_count defined
-        # TODO see how to manage Generic node
         peer_schema = registry.schema.get(name=relm.schema.peer, branch=branch, duplicate=False)
         peer_rels = peer_schema.get_relationships_by_identifier(id=relm.schema.get_identifier())
-        if not peer_rels:
+
+        if not peer_rels and not peer_schema.is_generic_schema:
             return
 
         update_details = await relm.fetch_relationship_ids(db=self.db, force_refresh=False)
-        for peer_rel in peer_rels:
-            # If a relationship is directional and both have the same direction they can't work together
-            if relm.schema.direction == peer_rel.direction and peer_rel.direction != RelationshipDirection.BIDIR:
-                continue
 
+        if peer_rels:
+            for peer_rel in peer_rels:
+                # If a relationship is directional and both have the same direction they can't work together
+                if relm.schema.direction == peer_rel.direction and peer_rel.direction != RelationshipDirection.BIDIR:
+                    continue
+
+                for peer_id in (
+                    update_details.peer_ids_present_local_only + update_details.peer_ids_present_database_only
+                ):
+                    if peer_rel.max_count and peer_id in update_details.peer_ids_present_local_only:
+                        nodes_to_validate.append(
+                            NodeToValidate(uuid=peer_id, max_count=peer_rel.max_count, cardinality=peer_rel.cardinality)
+                        )
+
+                    if peer_rel.min_count and peer_id in update_details.peer_ids_present_database_only:
+                        nodes_to_validate.append(
+                            NodeToValidate(uuid=peer_id, min_count=peer_rel.min_count, cardinality=peer_rel.cardinality)
+                        )
+        else:
+            # Generic peer: the reverse relationship is defined on concrete child types, not the generic itself.
+            # relm.resolve() was already called above, so get_peer_kind() returns the concrete type.
+            peer_id_to_kind: dict[str, str] = {
+                rel.peer_id: rel.get_peer_kind() for rel in relm._relationships if rel.peer_id
+            }
             for peer_id in update_details.peer_ids_present_local_only + update_details.peer_ids_present_database_only:
-                if peer_rel.max_count and peer_id in update_details.peer_ids_present_local_only:
-                    nodes_to_validate.append(
-                        NodeToValidate(uuid=peer_id, max_count=peer_rel.max_count, cardinality=peer_rel.cardinality)
-                    )
-
-                if peer_rel.min_count and peer_id in update_details.peer_ids_present_database_only:
-                    nodes_to_validate.append(
-                        NodeToValidate(uuid=peer_id, min_count=peer_rel.min_count, cardinality=peer_rel.cardinality)
-                    )
+                concrete_kind = peer_id_to_kind.get(peer_id)
+                if not concrete_kind or concrete_kind == relm.schema.peer:
+                    continue
+                concrete_schema = registry.schema.get(name=concrete_kind, branch=branch, duplicate=False)
+                for peer_rel in concrete_schema.get_relationships_by_identifier(id=relm.schema.get_identifier()):
+                    if (
+                        relm.schema.direction == peer_rel.direction
+                        and peer_rel.direction != RelationshipDirection.BIDIR
+                    ):
+                        continue
+                    if peer_rel.max_count and peer_id in update_details.peer_ids_present_local_only:
+                        nodes_to_validate.append(
+                            NodeToValidate(uuid=peer_id, max_count=peer_rel.max_count, cardinality=peer_rel.cardinality)
+                        )
+                    if peer_rel.min_count and peer_id in update_details.peer_ids_present_database_only:
+                        nodes_to_validate.append(
+                            NodeToValidate(uuid=peer_id, min_count=peer_rel.min_count, cardinality=peer_rel.cardinality)
+                        )
 
         query = await RelationshipCountPerNodeQuery.init(
             db=self.db,

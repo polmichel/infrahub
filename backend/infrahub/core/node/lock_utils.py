@@ -54,6 +54,20 @@ def _hash(value: str) -> str:
     return hashlib.sha256(value.encode()).hexdigest()
 
 
+def _generic_peer_has_count_constraint(
+    peer_schema: GenericSchema, identifier: str, schema_branch: SchemaBranch
+) -> bool:
+    """Return True if any concrete child of a generic defines a count constraint on the given identifier."""
+    for child_kind in peer_schema.used_by:
+        child_schema = schema_branch.get(name=child_kind, duplicate=False)
+        child_rel = child_schema.get_relationship_by_identifier(id=identifier, raise_on_error=False)
+        if child_rel and (
+            child_rel.cardinality == RelationshipCardinality.ONE or child_rel.max_count or child_rel.min_count
+        ):
+            return True
+    return False
+
+
 def get_lock_names_on_object_mutation(node: Node, schema_branch: SchemaBranch) -> list[str]:
     """
     Return lock names for object on which we want to avoid concurrent mutation (create/update).
@@ -93,6 +107,11 @@ def get_lock_names_on_object_mutation(node: Node, schema_branch: SchemaBranch) -
                 peer_rel.cardinality == RelationshipCardinality.ONE or peer_rel.max_count or peer_rel.min_count
             ):
                 lock_names.add(f"{RELATIONSHIP_COUNT_LOCK_NAMESPACE}.{rel.schema.identifier}.{peer_id}")
+            elif peer_rel is None and isinstance(peer_schema, GenericSchema):
+                # Generic peer: the reverse relationship may be defined on concrete children.
+                # Lock conservatively if any child has a constrained reverse relationship.
+                if _generic_peer_has_count_constraint(peer_schema, rel.schema.identifier, schema_branch):
+                    lock_names.add(f"{RELATIONSHIP_COUNT_LOCK_NAMESPACE}.{rel.schema.identifier}.{peer_id}")
 
     lock_kinds = _get_kinds_to_lock_on_object_mutation(node.get_kind(), schema_branch)
     for kind in lock_kinds:
