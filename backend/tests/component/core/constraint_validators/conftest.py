@@ -9,6 +9,80 @@ from infrahub.database import InfrahubDatabase
 
 
 @pytest.fixture
+async def generic_peer_cardinality_schema(db: InfrahubDatabase, default_branch: Branch) -> SchemaRoot:
+    """Schema where the writing-side peer is a generic that does not define the reverse relationship.
+    Only concrete children (UnicastAddress, AnycastAddress) define the reverse, with different cardinalities.
+    This mimics the BuiltinIPAddress / NetworkUnicastIPAddress pattern from the real bug."""
+    SCHEMA = {
+        "generics": [
+            {
+                "name": "GenericAddress",
+                "namespace": "Test",
+                "attributes": [
+                    {"name": "address", "kind": "Text", "unique": True},
+                ],
+            },
+        ],
+        "nodes": [
+            {
+                "name": "UnicastAddress",
+                "namespace": "Test",
+                "inherit_from": ["TestGenericAddress"],
+                "relationships": [
+                    {
+                        "name": "interface",
+                        "peer": "TestInterface",
+                        "kind": "Generic",
+                        "optional": True,
+                        "cardinality": "one",
+                        "identifier": "test__l3interface",
+                        "direction": "inbound",
+                    },
+                ],
+            },
+            {
+                "name": "AnycastAddress",
+                "namespace": "Test",
+                "inherit_from": ["TestGenericAddress"],
+                "relationships": [
+                    {
+                        "name": "interface",
+                        "peer": "TestInterface",
+                        "kind": "Generic",
+                        "optional": True,
+                        "cardinality": "many",
+                        "identifier": "test__l3interface",
+                        "direction": "inbound",
+                    },
+                ],
+            },
+            {
+                "name": "Interface",
+                "namespace": "Test",
+                "attributes": [
+                    {"name": "name", "kind": "Text", "unique": True},
+                ],
+                "relationships": [
+                    {
+                        "name": "addresses",
+                        "peer": "TestGenericAddress",
+                        "kind": "Attribute",
+                        "optional": True,
+                        "cardinality": "many",
+                        "identifier": "test__l3interface",
+                        "direction": "outbound",
+                    },
+                ],
+            },
+        ],
+    }
+
+    schema = SchemaRoot(**SCHEMA)
+    registry.schema.register_schema(schema=schema, branch=default_branch.name)
+    return schema
+
+
+@pytest.fixture
 async def car_person_schema_generics_simple(db: InfrahubDatabase, default_branch: Branch) -> SchemaRoot:
     SCHEMA = {
         "generics": [
