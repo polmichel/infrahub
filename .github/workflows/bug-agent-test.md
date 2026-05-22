@@ -20,8 +20,10 @@ tools:
     approval-labels:
       - state/ai/pipeline-ready
       - state/ai/analysis-complete
+      - state/ai/test-complete
       - state/ai/test-approved
       - state/ai/test-changes-requested
+      - state/ai/fix-complete
       - state/ai/fix-approved
       - state/ai/fix-changes-requested
 network: defaults
@@ -311,6 +313,13 @@ AGENT_TEST_COMPLETE
 The literal text `AGENT_TEST_COMPLETE` MUST appear in the PR body. The downstream
 `/bug-fix` gate scans the PR body for this exact substring; if it is missing, the
 pipeline halts.
+
+**Apply the label `state/ai/test-complete` to the draft PR you just opened** (via the
+`add_labels` safe output). This label authorizes the reviewer's DIFC integrity check —
+without it the reviewer cannot read the PR through the gh-aw proxy.
+
+On revision mode (re-running this agent on an existing PR), re-applying the same
+label is a no-op; ensure it remains present.
 
 Post a short comment on the issue linking to the draft PR. Do NOT include
 `AGENT_TEST_COMPLETE` in that issue comment -- it belongs only in the PR body.
