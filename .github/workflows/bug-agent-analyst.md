@@ -16,6 +16,8 @@ permissions:
 tools:
   github:
     toolsets: [default]
+    min-integrity: approved
+    approval-labels: [state/ai/pipeline-ready]
 network: defaults
 checkout:
   fetch-depth: 0
@@ -150,3 +152,7 @@ AGENT_ANALYSIS_COMPLETE
 The `AGENT_ANALYSIS_COMPLETE` marker must appear verbatim as the **last line** of the
 comment. It signals to the user that analysis is complete and they may now trigger the
 test-writer with `/bug-tdd` on the same issue.
+
+After posting the comment, apply the label `state/ai/analysis-complete` to the issue.
+The downstream `/bug-tdd` workflow gate reads this label (not the comment marker) to
+decide whether to proceed.

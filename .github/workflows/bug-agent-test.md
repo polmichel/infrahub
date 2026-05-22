@@ -16,6 +16,8 @@ permissions:
 tools:
   github:
     toolsets: [default]
+    min-integrity: approved
+    approval-labels: [state/ai/pipeline-ready]
 network: defaults
 checkout:
   fetch-depth: 0
@@ -46,20 +48,19 @@ steps:
           fail "Cannot run /bug-tdd: fix already applied (AGENT_FIX_COMPLETE present). Test revision after fix is unsupported."
         fi
 
-        REQ=$(gh api "repos/$REPO/issues/$ISSUE_NUMBER/comments?per_page=100" \
-          --jq '[.[] | select((.user.login == "test-bug-pipeline[bot]" or .user.login == "github-actions[bot]" or .user.login == "claude[bot]")
-            and (.body | contains("AGENT_REVIEW_VERDICT: TEST_CHANGES_REQUESTED")))] | length')
-        if [ "$REQ" = "0" ]; then
-          fail "Cannot run /bug-tdd: no TEST_CHANGES_REQUESTED verdict from reviewer to act on."
+        LABELS=$(gh api "repos/$REPO/issues/$ISSUE_NUMBER" --jq '[.labels[].name]')
+        HAS_REQ=$(echo "$LABELS" | jq 'index("state/ai/test-changes-requested") != null')
+        HAS_APPROVED=$(echo "$LABELS" | jq 'index("state/ai/test-approved") != null')
+        if [ "$HAS_REQ" != "true" ] || [ "$HAS_APPROVED" = "true" ]; then
+          fail "Cannot run /bug-tdd: no pending state/ai/test-changes-requested label (or already test-approved)."
         fi
         exit 0
       fi
 
-      ANALYSIS=$(gh api "repos/$REPO/issues/$ISSUE_NUMBER/comments?per_page=100" \
-        --jq '[.[] | select((.user.login == "test-bug-pipeline[bot]" or .user.login == "github-actions[bot]" or .user.login == "claude[bot]")
-          and (.body | contains("AGENT_ANALYSIS_COMPLETE")))] | length')
-      if [ "$ANALYSIS" = "0" ]; then
-        fail "Cannot run /bug-tdd: no AGENT_ANALYSIS_COMPLETE comment from analyst. Run /bug-analyze first."
+      HAS_ANALYSIS=$(gh api "repos/$REPO/issues/$ISSUE_NUMBER" \
+        --jq '[.labels[].name] | index("state/ai/analysis-complete") != null')
+      if [ "$HAS_ANALYSIS" != "true" ]; then
+        fail "Cannot run /bug-tdd: issue is missing state/ai/analysis-complete label. Run /bug-analyze first."
       fi
   - uses: actions/setup-python@v6
     with:
