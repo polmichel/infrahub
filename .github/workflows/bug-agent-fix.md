@@ -17,7 +17,13 @@ tools:
   github:
     toolsets: [default]
     min-integrity: approved
-    approval-labels: [state/ai/pipeline-ready]
+    approval-labels:
+      - state/ai/pipeline-ready
+      - state/ai/analysis-complete
+      - state/ai/test-approved
+      - state/ai/test-changes-requested
+      - state/ai/fix-approved
+      - state/ai/fix-changes-requested
 network: defaults
 checkout:
   fetch-depth: 0
