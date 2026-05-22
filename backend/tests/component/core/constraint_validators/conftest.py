@@ -4,7 +4,12 @@ from infrahub.core import registry
 from infrahub.core.branch import Branch
 from infrahub.core.constants import BranchSupportType
 from infrahub.core.node import Node
-from infrahub.core.schema import SchemaRoot
+from infrahub.core.schema import (
+    AttributeSchema,
+    NodeSchema,
+    SchemaRoot,
+)
+from infrahub.core.schema.computed_attribute import ComputedAttribute, ComputedAttributeKind
 from infrahub.database import InfrahubDatabase
 
 
@@ -116,6 +121,38 @@ async def car_person_generics_data_simple(
         "c2": c2,
         "c3": c3,
     }
+
+
+@pytest.fixture
+async def random_stuff_schema_computed_unique(db: InfrahubDatabase, default_branch: Branch) -> SchemaRoot:
+    schema = SchemaRoot(
+        nodes=[
+            NodeSchema(
+                name="Stuff",
+                namespace="Random",
+                display_label="name__value",
+                human_friendly_id=["name__value"],
+                attributes=[
+                    AttributeSchema(
+                        name="name",
+                        kind="Text",
+                        unique=True,
+                        optional=False,
+                        read_only=True,
+                        computed_attribute=ComputedAttribute(
+                            kind=ComputedAttributeKind.JINJA2,
+                            jinja2_template="{{ description__value | upper }}-STUFF",
+                        ),
+                    ),
+                    AttributeSchema(name="description", kind="Text"),
+                ],
+            ),
+        ],
+    )
+    registry.schema.register_schema(schema=schema, branch=default_branch.name)
+    default_branch.update_schema_hash()
+    await default_branch.save(db=db)
+    return schema
 
 
 @pytest.fixture

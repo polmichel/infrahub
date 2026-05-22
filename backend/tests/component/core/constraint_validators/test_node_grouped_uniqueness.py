@@ -348,3 +348,19 @@ class TestNodeGroupedUniquenessConstraint:
         with pytest.raises(ValidationError, match="Violates uniqueness constraint 'name'") as exc_info:
             await self.__call_system_under_test(db=db, branch=default_branch, node=car_mercedes_of_maria)
         assert not isinstance(exc_info.value, HFIDViolatedError), "HFIDViolatedError should not be raised here"
+
+    async def test_uniqueness_constraint_conflict_jinja2_computed_attribute(
+        self,
+        db: InfrahubDatabase,
+        default_branch: Branch,
+        random_stuff_schema_computed_unique: SchemaRoot,
+    ) -> None:
+        _ = await create_and_save(db=db, schema="RandomStuff", description="DESCRIPTION")
+        second_stuff = await create_and_save(db=db, schema="RandomStuff", description="DESCRIPTION")
+
+        assert second_stuff.name.value == "DESCRIPTION-STUFF"
+
+        with pytest.raises(HFIDViolatedError, match="Violates uniqueness constraint 'name'"):
+            await self.__call_system_under_test(
+                db=db, branch=default_branch, node=second_stuff, filters=["description"]
+            )
