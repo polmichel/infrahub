@@ -55,9 +55,10 @@ steps:
         SKIP_MSG="Skipping reviewer: test already TEST_APPROVED, waiting for fix."
       fi
 
-      COUNT=$(gh api "repos/$REPO/issues/$PR_NUMBER/comments?per_page=100" \
-        --jq "[.[] | select((.user.login == \"test-bug-pipeline[bot]\" or .user.login == \"github-actions[bot]\" or .user.login == \"claude[bot]\")
-          and (.body | contains(\"$MARKER\")))] | length")
+      COUNT=$(gh api graphql \
+        -f owner="${REPO%/*}" -f name="${REPO#*/}" -F number="$PR_NUMBER" \
+        -f query='query($owner:String!,$name:String!,$number:Int!){repository(owner:$owner,name:$name){pullRequest(number:$number){comments(first:100){nodes{author{login} body}}}}}' \
+        --jq "[.data.repository.pullRequest.comments.nodes[] | select((.author.login == \"test-bug-pipeline\" or .author.login == \"github-actions\" or .author.login == \"claude\") and (.body | contains(\"$MARKER\")))] | length")
 
       if [ "$COUNT" -gt 0 ]; then
         skip "$SKIP_MSG"
