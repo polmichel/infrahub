@@ -1105,6 +1105,44 @@ SCHEMA_BRANCH_VALIDATE_NAMES_TEST_CASES = [
         },
         expected_error="TestCriticality: save isn't allowed as an attribute name.",
     ),
+    SchemaBranchValidateNamesTestCaseData(
+        name="attribute-double-underscore-test",
+        schema={
+            "nodes": [
+                {
+                    "name": "Criticality",
+                    "namespace": "Test",
+                    "default_filter": "name__value",
+                    "branch": BranchSupportType.AWARE.value,
+                    "attributes": [
+                        {"name": "name", "kind": "Text", "unique": True},
+                        {"name": "name__asc", "kind": "Text"},
+                    ],
+                }
+            ]
+        },
+        expected_error="TestCriticality: name__asc isn't allowed as an attribute name, names must not contain '__'.",
+    ),
+    SchemaBranchValidateNamesTestCaseData(
+        name="relationship-double-underscore-test",
+        schema={
+            "nodes": [
+                {
+                    "name": "Criticality",
+                    "namespace": "Test",
+                    "default_filter": "name__value",
+                    "branch": BranchSupportType.AWARE.value,
+                    "attributes": [
+                        {"name": "name", "kind": "Text", "unique": True},
+                    ],
+                    "relationships": [
+                        {"name": "peer__asc", "peer": "Criticality", "cardinality": "one"},
+                    ],
+                }
+            ]
+        },
+        expected_error="TestCriticality: peer__asc isn't allowed as a relationship name, names must not contain '__'.",
+    ),
 ]
 
 
