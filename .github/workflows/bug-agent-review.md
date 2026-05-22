@@ -19,6 +19,8 @@ permissions:
 tools:
   github:
     toolsets: [default]
+    min-integrity: approved
+    approval-labels: [state/ai/pipeline-ready]
 network: defaults
 checkout:
   fetch-depth: 0
@@ -46,18 +48,17 @@ steps:
       }
 
       if [[ "$PR_BODY" == *"AGENT_FIX_COMPLETE"* ]]; then
-        MARKER="AGENT_REVIEW_VERDICT: FIX_APPROVED"
-        SKIP_MSG="Skipping reviewer: fix already FIX_APPROVED, pipeline complete."
+        LABEL="state/ai/fix-approved"
+        SKIP_MSG="Skipping reviewer: fix already fix-approved, pipeline complete."
       else
-        MARKER="AGENT_REVIEW_VERDICT: TEST_APPROVED"
-        SKIP_MSG="Skipping reviewer: test already TEST_APPROVED, waiting for fix."
+        LABEL="state/ai/test-approved"
+        SKIP_MSG="Skipping reviewer: test already test-approved, waiting for fix."
       fi
 
-      COUNT=$(gh api "repos/$REPO/issues/$PR_NUMBER/comments?per_page=100" \
-        --jq "[.[] | select((.user.login == \"test-bug-pipeline[bot]\" or .user.login == \"github-actions[bot]\" or .user.login == \"claude[bot]\")
-          and (.body | contains(\"$MARKER\")))] | length")
+      HAS=$(gh api "repos/$REPO/issues/$PR_NUMBER" \
+        --jq "[.labels[].name] | index(\"$LABEL\") != null")
 
-      if [ "$COUNT" -gt 0 ]; then
+      if [ "$HAS" = "true" ]; then
         skip "$SKIP_MSG"
       fi
 safe-outputs:
@@ -147,6 +148,20 @@ If neither marker is present, do nothing and stop.
 
 Be direct. The human reviewer will use your output to decide whether to merge,
 request changes, or escalate.
+
+6. **Apply the matching state label** to the PR (in addition to posting the comment).
+   Downstream workflow gates read these labels — they do NOT read the comment markers.
+
+   | Verdict marker in your comment | Label to apply | Label to remove (if present) |
+   |---|---|---|
+   | `AGENT_REVIEW_VERDICT: TEST_APPROVED` | `state/ai/test-approved` | `state/ai/test-changes-requested` |
+   | `AGENT_REVIEW_VERDICT: TEST_CHANGES_REQUESTED` | `state/ai/test-changes-requested` | `state/ai/test-approved` |
+   | `AGENT_REVIEW_VERDICT: FIX_APPROVED` | `state/ai/fix-approved` | `state/ai/fix-changes-requested` |
+   | `AGENT_REVIEW_VERDICT: FIX_CHANGES_REQUESTED` | `state/ai/fix-changes-requested` | `state/ai/fix-approved` |
+
+   Use the `add_labels` safe output to apply the new label. Remove the opposite label
+   with `gh api -X DELETE "repos/$GITHUB_REPOSITORY/issues/$PR_NUMBER/labels/<label>"`
+   (ignore 404 — it just means the label wasn't set).
 
 ---
 

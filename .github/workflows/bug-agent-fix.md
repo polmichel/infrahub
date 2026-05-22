@@ -16,6 +16,8 @@ permissions:
 tools:
   github:
     toolsets: [default]
+    min-integrity: approved
+    approval-labels: [state/ai/pipeline-ready]
 network: defaults
 checkout:
   fetch-depth: 0
@@ -42,11 +44,11 @@ steps:
       PR_BODY=$(echo "$PR_JSON" | jq -r '.body // ""')
 
       if [[ "$PR_BODY" == *"AGENT_FIX_COMPLETE"* ]]; then
-        REQ=$(gh api "repos/$REPO/issues/$PR_NUMBER/comments?per_page=100" \
-          --jq '[.[] | select((.user.login == "test-bug-pipeline[bot]" or .user.login == "github-actions[bot]" or .user.login == "claude[bot]")
-            and (.body | contains("AGENT_REVIEW_VERDICT: FIX_CHANGES_REQUESTED")))] | length')
-        if [ "$REQ" = "0" ]; then
-          fail "Cannot run /bug-fix: fix already complete and no FIX_CHANGES_REQUESTED verdict from reviewer."
+        LABELS=$(gh api "repos/$REPO/issues/$PR_NUMBER" --jq '[.labels[].name]')
+        HAS_REQ=$(echo "$LABELS" | jq 'index("state/ai/fix-changes-requested") != null')
+        HAS_APPROVED=$(echo "$LABELS" | jq 'index("state/ai/fix-approved") != null')
+        if [ "$HAS_REQ" != "true" ] || [ "$HAS_APPROVED" = "true" ]; then
+          fail "Cannot run /bug-fix: fix already complete and no pending state/ai/fix-changes-requested label (or already fix-approved)."
         fi
         exit 0
       fi
@@ -55,11 +57,10 @@ steps:
         fail "Cannot run /bug-fix: no AGENT_TEST_COMPLETE marker on PR body. Run /bug-tdd first."
       fi
 
-      APPROVED=$(gh api "repos/$REPO/issues/$PR_NUMBER/comments?per_page=100" \
-        --jq '[.[] | select((.user.login == "test-bug-pipeline[bot]" or .user.login == "github-actions[bot]" or .user.login == "claude[bot]")
-          and (.body | contains("AGENT_REVIEW_VERDICT: TEST_APPROVED")))] | length')
-      if [ "$APPROVED" = "0" ]; then
-        fail "Cannot run /bug-fix: test not yet approved by reviewer. Wait for TEST_APPROVED verdict."
+      HAS_APPROVED=$(gh api "repos/$REPO/issues/$PR_NUMBER" \
+        --jq '[.labels[].name] | index("state/ai/test-approved") != null')
+      if [ "$HAS_APPROVED" != "true" ]; then
+        fail "Cannot run /bug-fix: PR missing state/ai/test-approved label. Wait for reviewer."
       fi
   - uses: actions/setup-python@v6
     with:
