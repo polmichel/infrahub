@@ -42,9 +42,10 @@ steps:
       PR_BODY=$(echo "$PR_JSON" | jq -r '.body // ""')
 
       if [[ "$PR_BODY" == *"AGENT_FIX_COMPLETE"* ]]; then
-        REQ=$(gh api "repos/$REPO/issues/$PR_NUMBER/comments?per_page=100" \
-          --jq '[.[] | select((.user.login == "test-bug-pipeline[bot]" or .user.login == "github-actions[bot]" or .user.login == "claude[bot]")
-            and (.body | contains("AGENT_REVIEW_VERDICT: FIX_CHANGES_REQUESTED")))] | length')
+        REQ=$(gh api graphql \
+          -f owner="${REPO%/*}" -f name="${REPO#*/}" -F number="$PR_NUMBER" \
+          -f query='query($owner:String!,$name:String!,$number:Int!){repository(owner:$owner,name:$name){pullRequest(number:$number){comments(first:100){nodes{author{login} body}}}}}' \
+          --jq '[.data.repository.pullRequest.comments.nodes[] | select((.author.login == "test-bug-pipeline" or .author.login == "github-actions" or .author.login == "claude") and (.body | contains("AGENT_REVIEW_VERDICT: FIX_CHANGES_REQUESTED")))] | length')
         if [ "$REQ" = "0" ]; then
           fail "Cannot run /bug-fix: fix already complete and no FIX_CHANGES_REQUESTED verdict from reviewer."
         fi
@@ -55,9 +56,10 @@ steps:
         fail "Cannot run /bug-fix: no AGENT_TEST_COMPLETE marker on PR body. Run /bug-tdd first."
       fi
 
-      APPROVED=$(gh api "repos/$REPO/issues/$PR_NUMBER/comments?per_page=100" \
-        --jq '[.[] | select((.user.login == "test-bug-pipeline[bot]" or .user.login == "github-actions[bot]" or .user.login == "claude[bot]")
-          and (.body | contains("AGENT_REVIEW_VERDICT: TEST_APPROVED")))] | length')
+      APPROVED=$(gh api graphql \
+        -f owner="${REPO%/*}" -f name="${REPO#*/}" -F number="$PR_NUMBER" \
+        -f query='query($owner:String!,$name:String!,$number:Int!){repository(owner:$owner,name:$name){pullRequest(number:$number){comments(first:100){nodes{author{login} body}}}}}' \
+        --jq '[.data.repository.pullRequest.comments.nodes[] | select((.author.login == "test-bug-pipeline" or .author.login == "github-actions" or .author.login == "claude") and (.body | contains("AGENT_REVIEW_VERDICT: TEST_APPROVED")))] | length')
       if [ "$APPROVED" = "0" ]; then
         fail "Cannot run /bug-fix: test not yet approved by reviewer. Wait for TEST_APPROVED verdict."
       fi

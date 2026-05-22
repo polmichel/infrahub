@@ -46,18 +46,20 @@ steps:
           fail "Cannot run /bug-tdd: fix already applied (AGENT_FIX_COMPLETE present). Test revision after fix is unsupported."
         fi
 
-        REQ=$(gh api "repos/$REPO/issues/$ISSUE_NUMBER/comments?per_page=100" \
-          --jq '[.[] | select((.user.login == "test-bug-pipeline[bot]" or .user.login == "github-actions[bot]" or .user.login == "claude[bot]")
-            and (.body | contains("AGENT_REVIEW_VERDICT: TEST_CHANGES_REQUESTED")))] | length')
+        REQ=$(gh api graphql \
+          -f owner="${REPO%/*}" -f name="${REPO#*/}" -F number="$ISSUE_NUMBER" \
+          -f query='query($owner:String!,$name:String!,$number:Int!){repository(owner:$owner,name:$name){pullRequest(number:$number){comments(first:100){nodes{author{login} body}}}}}' \
+          --jq '[.data.repository.pullRequest.comments.nodes[] | select((.author.login == "test-bug-pipeline" or .author.login == "github-actions" or .author.login == "claude") and (.body | contains("AGENT_REVIEW_VERDICT: TEST_CHANGES_REQUESTED")))] | length')
         if [ "$REQ" = "0" ]; then
           fail "Cannot run /bug-tdd: no TEST_CHANGES_REQUESTED verdict from reviewer to act on."
         fi
         exit 0
       fi
 
-      ANALYSIS=$(gh api "repos/$REPO/issues/$ISSUE_NUMBER/comments?per_page=100" \
-        --jq '[.[] | select((.user.login == "test-bug-pipeline[bot]" or .user.login == "github-actions[bot]" or .user.login == "claude[bot]")
-          and (.body | contains("AGENT_ANALYSIS_COMPLETE")))] | length')
+      ANALYSIS=$(gh api graphql \
+        -f owner="${REPO%/*}" -f name="${REPO#*/}" -F number="$ISSUE_NUMBER" \
+        -f query='query($owner:String!,$name:String!,$number:Int!){repository(owner:$owner,name:$name){issue(number:$number){comments(first:100){nodes{author{login} body}}}}}' \
+        --jq '[.data.repository.issue.comments.nodes[] | select((.author.login == "test-bug-pipeline" or .author.login == "github-actions" or .author.login == "claude") and (.body | contains("AGENT_ANALYSIS_COMPLETE")))] | length')
       if [ "$ANALYSIS" = "0" ]; then
         fail "Cannot run /bug-tdd: no AGENT_ANALYSIS_COMPLETE comment from analyst. Run /bug-analyze first."
       fi
