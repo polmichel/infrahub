@@ -20,8 +20,10 @@ tools:
     approval-labels:
       - state/ai/pipeline-ready
       - state/ai/analysis-complete
+      - state/ai/test-complete
       - state/ai/test-approved
       - state/ai/test-changes-requested
+      - state/ai/fix-complete
       - state/ai/fix-approved
       - state/ai/fix-changes-requested
 network: defaults
@@ -271,6 +273,13 @@ sees the `AGENT_FIX_COMPLETE` marker before reviewing the code):
 ```bash
 git push -u origin <branch>
 ```
+
+**Apply the label `state/ai/fix-complete` to the PR** (via the `add_labels` safe output).
+This label authorizes the reviewer's DIFC integrity check on the now-fix-stage PR —
+without it the reviewer cannot read the PR through the gh-aw proxy.
+
+In revision mode, re-applying the same label is a no-op; ensure it remains present
+after each push.
 
 Post a comment on the issue linking to the updated PR.
 

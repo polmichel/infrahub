@@ -20,8 +20,10 @@ tools:
     approval-labels:
       - state/ai/pipeline-ready
       - state/ai/analysis-complete
+      - state/ai/test-complete
       - state/ai/test-approved
       - state/ai/test-changes-requested
+      - state/ai/fix-complete
       - state/ai/fix-approved
       - state/ai/fix-changes-requested
 network: defaults
