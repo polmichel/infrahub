@@ -165,13 +165,6 @@ After posting the comment, apply the label `state/ai/analysis-complete` to the i
 The downstream `/bug-tdd` workflow gate reads this label (not the comment marker) to
 decide whether to proceed.
 
-Then remove the bootstrap approval label `state/ai/pipeline-ready` from the issue:
-
-```bash
-gh api -X DELETE "repos/$GITHUB_REPOSITORY/issues/$ISSUE_NUMBER/labels/state/ai/pipeline-ready" 2>/dev/null || true
-```
-
-(Ignore proxy errors on the response — the DELETE side effect happens regardless.
-Once `state/ai/analysis-complete` is set, any downstream workflow recognizes the
-issue as authorized via the expanded `approval-labels` list, so the bootstrap
-`state/ai/pipeline-ready` is no longer needed.)
+(The bootstrap `state/ai/pipeline-ready` label is stripped automatically by the
+`bug-pipeline-state-cleanup.yml` workflow once `state/ai/analysis-complete` is set.
+No action required from this agent.)
