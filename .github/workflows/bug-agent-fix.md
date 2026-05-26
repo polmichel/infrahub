@@ -18,7 +18,6 @@ tools:
     toolsets: [default]
     min-integrity: approved
     approval-labels:
-      - state/ai/pipeline-ready
       - state/ai/analysis-complete
       - state/ai/test-complete
       - state/ai/test-approved
@@ -281,6 +280,16 @@ without it the reviewer cannot read the PR through the gh-aw proxy.
 In revision mode, re-applying the same label is a no-op; ensure it remains present
 after each push.
 
+Then remove the now-superseded `state/ai/test-approved` label from the PR -- it has
+served its purpose as the gate that authorized this fix run:
+
+```bash
+PR_NUMBER=$(gh pr view --json number -q .number)
+gh api -X DELETE "repos/$GITHUB_REPOSITORY/issues/$PR_NUMBER/labels/state/ai/test-approved" 2>/dev/null || true
+```
+
+Ignore proxy errors on the response -- the DELETE side effect happens regardless.
+
 Post a comment on the issue linking to the updated PR.
 
 ## Revision mode
@@ -302,6 +311,15 @@ You were triggered by `/bug-fix` on a PR whose latest reviewer comment contains
    - Verify the replication test still passes (Step 5).
    - Run all pre-CI checks (Phases 1 through 4 of Step 6).
 6. Push the commits. The reviewer agent will be re-triggered automatically.
+7. After pushing, remove the now-resolved `state/ai/fix-changes-requested` label
+   from the PR (the reviewer will re-apply a verdict label on the next run):
+
+   ```bash
+   PR_NUMBER=$(gh pr view --json number -q .number)
+   gh api -X DELETE "repos/$GITHUB_REPOSITORY/issues/$PR_NUMBER/labels/state/ai/fix-changes-requested" 2>/dev/null || true
+   ```
+
+   Ignore proxy errors on the response -- the DELETE side effect happens regardless.
 
 ## When to stop
 

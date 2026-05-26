@@ -21,7 +21,6 @@ tools:
     toolsets: [default]
     min-integrity: approved
     approval-labels:
-      - state/ai/pipeline-ready
       - state/ai/analysis-complete
       - state/ai/test-complete
       - state/ai/test-approved
@@ -160,16 +159,18 @@ request changes, or escalate.
 6. **Apply the matching state label** to the PR (in addition to posting the comment).
    Downstream workflow gates read these labels — they do NOT read the comment markers.
 
-   | Verdict marker in your comment | Label to apply | Label to remove (if present) |
+   | Verdict marker in your comment | Label to apply | Labels to remove (if present) |
    |---|---|---|
-   | `AGENT_REVIEW_VERDICT: TEST_APPROVED` | `state/ai/test-approved` | `state/ai/test-changes-requested` |
-   | `AGENT_REVIEW_VERDICT: TEST_CHANGES_REQUESTED` | `state/ai/test-changes-requested` | `state/ai/test-approved` |
-   | `AGENT_REVIEW_VERDICT: FIX_APPROVED` | `state/ai/fix-approved` | `state/ai/fix-changes-requested` |
-   | `AGENT_REVIEW_VERDICT: FIX_CHANGES_REQUESTED` | `state/ai/fix-changes-requested` | `state/ai/fix-approved` |
+   | `AGENT_REVIEW_VERDICT: TEST_APPROVED` | `state/ai/test-approved` | `state/ai/test-changes-requested`, `state/ai/test-complete` |
+   | `AGENT_REVIEW_VERDICT: TEST_CHANGES_REQUESTED` | `state/ai/test-changes-requested` | `state/ai/test-approved`, `state/ai/test-complete` |
+   | `AGENT_REVIEW_VERDICT: FIX_APPROVED` | `state/ai/fix-approved` | `state/ai/fix-changes-requested`, `state/ai/fix-complete` |
+   | `AGENT_REVIEW_VERDICT: FIX_CHANGES_REQUESTED` | `state/ai/fix-changes-requested` | `state/ai/fix-approved`, `state/ai/fix-complete` |
 
-   Use the `add_labels` safe output to apply the new label. Remove the opposite label
-   with `gh api -X DELETE "repos/$GITHUB_REPOSITORY/issues/$PR_NUMBER/labels/<label>"`
-   (ignore 404 — it just means the label wasn't set).
+   Use the `add_labels` safe output to apply the new label. Remove each label in the
+   "Labels to remove" column with
+   `gh api -X DELETE "repos/$GITHUB_REPOSITORY/issues/$PR_NUMBER/labels/<label>"`
+   (ignore 404 — it just means the label wasn't set). `$PR_NUMBER` is the current PR
+   number (use `gh pr view --json number -q .number`).
 
 ---
 
