@@ -352,12 +352,6 @@ verdict was `TEST_CHANGES_REQUESTED`).
    still fail for the right reason after your changes. If it now passes, your revision
    broke the test -- investigate and fix.
 7. Push the commits. The reviewer agent will be re-triggered automatically.
-8. After pushing, remove the now-resolved `state/ai/test-changes-requested` label
-   from the PR (the reviewer will re-apply a verdict label on the next run):
-
-   ```bash
-   PR_NUMBER=$(gh pr view --json number -q .number)
-   gh api -X DELETE "repos/$GITHUB_REPOSITORY/issues/$PR_NUMBER/labels/state/ai/test-changes-requested" 2>/dev/null || true
-   ```
-
-   Ignore proxy errors on the response -- the DELETE side effect happens regardless.
+   When the reviewer applies its next verdict label, the
+   `bug-pipeline-state-cleanup.yml` workflow strips the stale
+   `state/ai/test-changes-requested` label automatically.

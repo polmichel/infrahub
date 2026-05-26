@@ -1,0 +1,55 @@
+name: Bug pipeline state cleanup
+
+# Listens for state/ai/* label additions on bug-pipeline issues and PRs, then
+# removes precedent labels deterministically. Decoupled from the agent workflows
+# because gh-aw's strict mode forbids granting issues:write inside an agent job,
+# so the agents themselves cannot delete labels.
+
+on:
+  issues:
+    types: [labeled]
+  pull_request_target:
+    types: [labeled]
+
+permissions:
+  issues: write
+  pull-requests: write
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+    if: startsWith(github.event.label.name, 'state/ai/')
+    steps:
+      - name: Remove precedent state/ai/* labels
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          NUMBER: ${{ github.event.issue.number || github.event.pull_request.number }}
+          ADDED: ${{ github.event.label.name }}
+        run: |
+          set -euo pipefail
+          # Precedent-label map: when a state transitions to a new value, the
+          # listed labels are no longer the active state and should be removed.
+          declare -A precedent
+          precedent["state/ai/analysis-complete"]="state/ai/pipeline-ready"
+          precedent["state/ai/test-approved"]="state/ai/test-complete state/ai/test-changes-requested"
+          precedent["state/ai/test-changes-requested"]="state/ai/test-complete state/ai/test-approved"
+          precedent["state/ai/fix-complete"]="state/ai/test-approved"
+          precedent["state/ai/fix-approved"]="state/ai/fix-complete state/ai/fix-changes-requested"
+          precedent["state/ai/fix-changes-requested"]="state/ai/fix-complete state/ai/fix-approved"
+
+          to_remove="${precedent[$ADDED]:-}"
+          if [ -z "$to_remove" ]; then
+            echo "No precedent labels mapped for '$ADDED' — nothing to do."
+            exit 0
+          fi
+
+          echo "Trigger label: $ADDED on #$NUMBER"
+          for label in $to_remove; do
+            echo "Removing: $label"
+            # 404 = label wasn't present; treat as success.
+            gh api -X DELETE "repos/$REPO/issues/$NUMBER/labels/$label" \
+              --silent 2>/dev/null \
+              && echo "  -> removed" \
+              || echo "  -> not present (skipped)"
+          done
