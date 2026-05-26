@@ -100,6 +100,8 @@ safe-outputs:
     draft: true
     base-branch: stable
     allowed-base-branches: [stable]
+    labels:
+      - state/ai/test-complete
   push-to-pull-request-branch:
     max: 3
   missing-tool:
