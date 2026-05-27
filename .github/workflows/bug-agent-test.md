@@ -16,6 +16,15 @@ permissions:
 tools:
   github:
     toolsets: [default]
+    min-integrity: approved
+    approval-labels:
+      - state/ai/analysis-complete
+      - state/ai/test-complete
+      - state/ai/test-approved
+      - state/ai/test-changes-requested
+      - state/ai/fix-complete
+      - state/ai/fix-approved
+      - state/ai/fix-changes-requested
 network: defaults
 checkout:
   fetch-depth: 0
@@ -35,11 +44,9 @@ steps:
         exit 1
       }
 
-      ISSUE_JSON=$(gh api "repos/$REPO/issues/$ISSUE_NUMBER")
-      IS_PR=$(echo "$ISSUE_JSON" | jq -r 'if .pull_request then "true" else "false" end')
-
-      if [ "$IS_PR" = "true" ]; then
-        PR_BODY=$(gh api "repos/$REPO/pulls/$ISSUE_NUMBER" | jq -r '.body // ""')
+      PR_JSON=$(gh api "repos/$REPO/pulls/$ISSUE_NUMBER" 2>/dev/null || echo "")
+      if [ -n "$PR_JSON" ] && [ "$(echo "$PR_JSON" | jq -r '.number // empty')" != "" ]; then
+        PR_BODY=$(echo "$PR_JSON" | jq -r '.body // ""')
 
         if [[ "$PR_BODY" != *"AGENT_TEST_COMPLETE"* ]]; then
           fail "Cannot run /bug-tdd here: PR has no AGENT_TEST_COMPLETE marker."
@@ -48,20 +55,19 @@ steps:
           fail "Cannot run /bug-tdd: fix already applied (AGENT_FIX_COMPLETE present). Test revision after fix is unsupported."
         fi
 
-        REQ=$(gh api "repos/$REPO/issues/$ISSUE_NUMBER/comments" --paginate \
-          --jq '[.[] | select((.user.login == "infrahub-bug-pipeline[bot]" or .user.login == "github-actions[bot]" or .user.login == "claude[bot]")
-            and (.body | contains("AGENT_REVIEW_VERDICT: TEST_CHANGES_REQUESTED")))] | length')
-        if [ "$REQ" = "0" ]; then
-          fail "Cannot run /bug-tdd: no TEST_CHANGES_REQUESTED verdict from reviewer to act on."
+        LABELS=$(gh api "repos/$REPO/issues/$ISSUE_NUMBER" --jq '[.labels[].name]')
+        HAS_REQ=$(echo "$LABELS" | jq 'index("state/ai/test-changes-requested") != null')
+        HAS_APPROVED=$(echo "$LABELS" | jq 'index("state/ai/test-approved") != null')
+        if [ "$HAS_REQ" != "true" ] || [ "$HAS_APPROVED" = "true" ]; then
+          fail "Cannot run /bug-tdd: no pending state/ai/test-changes-requested label (or already test-approved)."
         fi
         exit 0
       fi
 
-      ANALYSIS=$(gh api "repos/$REPO/issues/$ISSUE_NUMBER/comments" --paginate \
-        --jq '[.[] | select((.user.login == "infrahub-bug-pipeline[bot]" or .user.login == "github-actions[bot]" or .user.login == "claude[bot]")
-          and (.body | contains("AGENT_ANALYSIS_COMPLETE")))] | length')
-      if [ "$ANALYSIS" = "0" ]; then
-        fail "Cannot run /bug-tdd: no AGENT_ANALYSIS_COMPLETE comment from analyst. Run /bug-analyze first."
+      HAS_ANALYSIS=$(gh api "repos/$REPO/issues/$ISSUE_NUMBER" \
+        --jq '[.labels[].name] | index("state/ai/analysis-complete") != null')
+      if [ "$HAS_ANALYSIS" != "true" ]; then
+        fail "Cannot run /bug-tdd: issue is missing state/ai/analysis-complete label. Run /bug-analyze first."
       fi
   - uses: actions/setup-python@v6
     with:
@@ -93,6 +99,8 @@ safe-outputs:
     draft: true
     base-branch: stable
     allowed-base-branches: [stable]
+    labels:
+      - state/ai/test-complete
   push-to-pull-request-branch:
     max: 3
   missing-tool:
@@ -307,6 +315,13 @@ The literal text `AGENT_TEST_COMPLETE` MUST appear in the PR body. The downstrea
 `/bug-fix` gate scans the PR body for this exact substring; if it is missing, the
 pipeline halts.
 
+**Apply the label `state/ai/test-complete` to the draft PR you just opened** (via the
+`add_labels` safe output). This label authorizes the reviewer's DIFC integrity check —
+without it the reviewer cannot read the PR through the gh-aw proxy.
+
+On revision mode (re-running this agent on an existing PR), re-applying the same
+label is a no-op; ensure it remains present.
+
 Post a short comment on the issue linking to the draft PR. Do NOT include
 `AGENT_TEST_COMPLETE` in that issue comment -- it belongs only in the PR body.
 
@@ -337,3 +352,6 @@ verdict was `TEST_CHANGES_REQUESTED`).
    still fail for the right reason after your changes. If it now passes, your revision
    broke the test -- investigate and fix.
 7. Push the commits. The reviewer agent will be re-triggered automatically.
+   When the reviewer applies its next verdict label, the
+   `bug-pipeline-state-cleanup.yml` workflow strips the stale
+   `state/ai/test-changes-requested` label automatically.

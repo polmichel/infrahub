@@ -7,7 +7,7 @@ on:
     paths-ignore:
       - "**/*.md"
   bots:
-    - "infrahub-bug-pipeline[bot]"
+    - "test-bug-pipeline[bot]"
   github-app:
     client-id: ${{ secrets.GH_AW_APP_ID }}
     private-key: ${{ secrets.GH_AW_APP_PRIVATE_KEY }}
@@ -19,6 +19,15 @@ permissions:
 tools:
   github:
     toolsets: [default]
+    min-integrity: approved
+    approval-labels:
+      - state/ai/analysis-complete
+      - state/ai/test-complete
+      - state/ai/test-approved
+      - state/ai/test-changes-requested
+      - state/ai/fix-complete
+      - state/ai/fix-approved
+      - state/ai/fix-changes-requested
 network: defaults
 checkout:
   fetch-depth: 0
@@ -46,18 +55,17 @@ steps:
       }
 
       if [[ "$PR_BODY" == *"AGENT_FIX_COMPLETE"* ]]; then
-        MARKER="AGENT_REVIEW_VERDICT: FIX_APPROVED"
-        SKIP_MSG="Skipping reviewer: fix already FIX_APPROVED, pipeline complete."
+        LABEL="state/ai/fix-approved"
+        SKIP_MSG="Skipping reviewer: fix already fix-approved, pipeline complete."
       else
-        MARKER="AGENT_REVIEW_VERDICT: TEST_APPROVED"
-        SKIP_MSG="Skipping reviewer: test already TEST_APPROVED, waiting for fix."
+        LABEL="state/ai/test-approved"
+        SKIP_MSG="Skipping reviewer: test already test-approved, waiting for fix."
       fi
 
-      COUNT=$(gh api "repos/$REPO/issues/$PR_NUMBER/comments" --paginate \
-        --jq "[.[] | select((.user.login == \"infrahub-bug-pipeline[bot]\" or .user.login == \"github-actions[bot]\" or .user.login == \"claude[bot]\")
-          and (.body | contains(\"$MARKER\")))] | length")
+      HAS=$(gh api "repos/$REPO/issues/$PR_NUMBER" \
+        --jq "[.labels[].name] | index(\"$LABEL\") != null")
 
-      if [ "$COUNT" -gt 0 ]; then
+      if [ "$HAS" = "true" ]; then
         skip "$SKIP_MSG"
       fi
 safe-outputs:
@@ -147,6 +155,20 @@ If neither marker is present, do nothing and stop.
 
 Be direct. The human reviewer will use your output to decide whether to merge,
 request changes, or escalate.
+
+6. **Apply the matching state label** to the PR (in addition to posting the comment).
+   Downstream workflow gates read these labels — they do NOT read the comment markers.
+
+   | Verdict marker in your comment | Label to apply |
+   |---|---|
+   | `AGENT_REVIEW_VERDICT: TEST_APPROVED` | `state/ai/test-approved` |
+   | `AGENT_REVIEW_VERDICT: TEST_CHANGES_REQUESTED` | `state/ai/test-changes-requested` |
+   | `AGENT_REVIEW_VERDICT: FIX_APPROVED` | `state/ai/fix-approved` |
+   | `AGENT_REVIEW_VERDICT: FIX_CHANGES_REQUESTED` | `state/ai/fix-changes-requested` |
+
+   Apply the new label via the `add_labels` safe output. Precedent labels (the
+   opposite verdict label, the `*-complete` label) are stripped automatically by
+   the `bug-pipeline-state-cleanup.yml` workflow when this new label is applied.
 
 ---
 

@@ -16,6 +16,15 @@ permissions:
 tools:
   github:
     toolsets: [default]
+    min-integrity: approved
+    approval-labels:
+      - state/ai/analysis-complete
+      - state/ai/test-complete
+      - state/ai/test-approved
+      - state/ai/test-changes-requested
+      - state/ai/fix-complete
+      - state/ai/fix-approved
+      - state/ai/fix-changes-requested
 network: defaults
 checkout:
   fetch-depth: 0
@@ -42,11 +51,11 @@ steps:
       PR_BODY=$(echo "$PR_JSON" | jq -r '.body // ""')
 
       if [[ "$PR_BODY" == *"AGENT_FIX_COMPLETE"* ]]; then
-        REQ=$(gh api "repos/$REPO/issues/$PR_NUMBER/comments" --paginate \
-          --jq '[.[] | select((.user.login == "infrahub-bug-pipeline[bot]" or .user.login == "github-actions[bot]" or .user.login == "claude[bot]")
-            and (.body | contains("AGENT_REVIEW_VERDICT: FIX_CHANGES_REQUESTED")))] | length')
-        if [ "$REQ" = "0" ]; then
-          fail "Cannot run /bug-fix: fix already complete and no FIX_CHANGES_REQUESTED verdict from reviewer."
+        LABELS=$(gh api "repos/$REPO/issues/$PR_NUMBER" --jq '[.labels[].name]')
+        HAS_REQ=$(echo "$LABELS" | jq 'index("state/ai/fix-changes-requested") != null')
+        HAS_APPROVED=$(echo "$LABELS" | jq 'index("state/ai/fix-approved") != null')
+        if [ "$HAS_REQ" != "true" ] || [ "$HAS_APPROVED" = "true" ]; then
+          fail "Cannot run /bug-fix: fix already complete and no pending state/ai/fix-changes-requested label (or already fix-approved)."
         fi
         exit 0
       fi
@@ -55,11 +64,10 @@ steps:
         fail "Cannot run /bug-fix: no AGENT_TEST_COMPLETE marker on PR body. Run /bug-tdd first."
       fi
 
-      APPROVED=$(gh api "repos/$REPO/issues/$PR_NUMBER/comments" --paginate \
-        --jq '[.[] | select((.user.login == "infrahub-bug-pipeline[bot]" or .user.login == "github-actions[bot]" or .user.login == "claude[bot]")
-          and (.body | contains("AGENT_REVIEW_VERDICT: TEST_APPROVED")))] | length')
-      if [ "$APPROVED" = "0" ]; then
-        fail "Cannot run /bug-fix: test not yet approved by reviewer. Wait for TEST_APPROVED verdict."
+      HAS_APPROVED=$(gh api "repos/$REPO/issues/$PR_NUMBER" \
+        --jq '[.labels[].name] | index("state/ai/test-approved") != null')
+      if [ "$HAS_APPROVED" != "true" ]; then
+        fail "Cannot run /bug-fix: PR missing state/ai/test-approved label. Wait for reviewer."
       fi
   - uses: actions/setup-python@v6
     with:
@@ -265,6 +273,16 @@ sees the `AGENT_FIX_COMPLETE` marker before reviewing the code):
 git push -u origin <branch>
 ```
 
+**Apply the label `state/ai/fix-complete` to the PR** (via the `add_labels` safe output).
+This label authorizes the reviewer's DIFC integrity check on the now-fix-stage PR —
+without it the reviewer cannot read the PR through the gh-aw proxy.
+
+In revision mode, re-applying the same label is a no-op; ensure it remains present
+after each push.
+
+(The `state/ai/test-approved` label is stripped automatically by the
+`bug-pipeline-state-cleanup.yml` workflow once `state/ai/fix-complete` is set.)
+
 Post a comment on the issue linking to the updated PR.
 
 ## Revision mode
@@ -286,6 +304,9 @@ You were triggered by `/bug-fix` on a PR whose latest reviewer comment contains
    - Verify the replication test still passes (Step 5).
    - Run all pre-CI checks (Phases 1 through 4 of Step 6).
 6. Push the commits. The reviewer agent will be re-triggered automatically.
+   When the reviewer applies its next verdict label, the
+   `bug-pipeline-state-cleanup.yml` workflow strips the stale
+   `state/ai/fix-changes-requested` label automatically.
 
 ## When to stop
 
