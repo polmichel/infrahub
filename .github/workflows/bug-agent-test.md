@@ -77,7 +77,7 @@ steps:
       version: 10
   - uses: actions/setup-node@v6
     with:
-      node-version: 24
+      node-version: 24.15.0
   - run: cd frontend/app && pnpm install --frozen-lockfile
   - run: cd frontend/app && pnpm exec playwright install chromium
 safe-outputs:
