@@ -130,6 +130,25 @@ async def test_search_docs_limit(client: TestClient, override_search_index_path:
     assert len(response_json) == 1
 
 
+async def test_search_docs_limit_zero(client: TestClient, override_search_index_path: None) -> None:
+    with client:
+        unbounded_response = client.get("/api/search/docs?query=a")
+        zero_limit_response = client.get("/api/search/docs?query=a&limit=0")
+
+    assert unbounded_response.status_code == 200
+    assert zero_limit_response.status_code == 200
+
+    unbounded_results = unbounded_response.json()
+    zero_limit_results = zero_limit_response.json()
+
+    assert isinstance(unbounded_results, list)
+    assert isinstance(zero_limit_results, list)
+    # The unbounded query returns more than one match, distinguishing this from the limit=1 case.
+    assert len(unbounded_results) > 1
+    # limit=0 means "no limit": it must return the full collection, not an empty list.
+    assert len(zero_limit_results) == len(unbounded_results)
+
+
 async def test_no_search_docs(client: TestClient, no_search_index_path: None) -> None:
     with client:
         response = client.get("/api/search/docs?query=guid")
