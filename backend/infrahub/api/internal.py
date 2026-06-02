@@ -173,7 +173,7 @@ async def search_docs(
         for result in search_results
     ]
 
-    if limit is not None:
+    if limit is not None and limit > 0:
         heading_results = heading_results[:limit]
 
     response_list: list[SearchResultAPI] = [
