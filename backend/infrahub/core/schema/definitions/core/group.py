@@ -87,6 +87,19 @@ core_generator_group = NodeSchema(
     branch=BranchSupportType.LOCAL,
     inherit_from=[InfrahubKind.GENERICGROUP],
     generate_profile=False,
+    attributes=[
+        # Generator groups are created and managed by generators, not something a user adds nodes
+        # to manually; default to "internal" so they are filtered out of the add-to-group dropdown.
+        # Overrides the Core.Group generic default ("default") for this kind only.
+        Attr(
+            name="group_type",
+            kind="Text",
+            description="Type of group (default or internal)",
+            enum=["default", "internal"],
+            default_value="internal",
+            optional=False,
+        ),
+    ],
 )
 
 core_generator_aware_group = NodeSchema(

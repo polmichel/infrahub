@@ -169,6 +169,19 @@ core_account_group = NodeSchema(
     generate_profile=False,
     inherit_from=[InfrahubKind.LINEAGEOWNER, InfrahubKind.LINEAGESOURCE, InfrahubKind.GENERICGROUP],
     branch=BranchSupportType.AGNOSTIC,
+    attributes=[
+        # Account groups are an internal RBAC construct, not a user-facing group to add nodes to;
+        # default to "internal" so they are filtered out of the add-to-group dropdown. Overrides
+        # the Core.Group generic default ("default") for this kind only.
+        Attr(
+            name="group_type",
+            kind="Text",
+            description="Type of group (default or internal)",
+            enum=["default", "internal"],
+            default_value="internal",
+            optional=False,
+        ),
+    ],
     relationships=[
         Rel(
             name="roles",
