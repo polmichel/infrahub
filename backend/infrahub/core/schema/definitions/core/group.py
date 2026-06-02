@@ -87,6 +87,16 @@ core_generator_group = NodeSchema(
     branch=BranchSupportType.LOCAL,
     inherit_from=[InfrahubKind.GENERICGROUP],
     generate_profile=False,
+    attributes=[
+        Attr(
+            name="group_type",
+            kind="Text",
+            description="Type of group (default or internal)",
+            enum=["default", "internal"],
+            default_value="internal",
+            optional=False,
+        ),
+    ],
 )
 
 core_generator_aware_group = NodeSchema(
@@ -102,6 +112,16 @@ core_generator_aware_group = NodeSchema(
     branch=BranchSupportType.AWARE,
     inherit_from=[InfrahubKind.GENERICGROUP],
     generate_profile=False,
+    attributes=[
+        Attr(
+            name="group_type",
+            kind="Text",
+            description="Type of group (default or internal)",
+            enum=["default", "internal"],
+            default_value="internal",
+            optional=False,
+        ),
+    ],
 )
 
 core_graphql_query_group = NodeSchema(
@@ -118,6 +138,14 @@ core_graphql_query_group = NodeSchema(
     inherit_from=[InfrahubKind.GENERICGROUP],
     generate_profile=False,
     attributes=[
+        Attr(
+            name="group_type",
+            kind="Text",
+            description="Type of group (default or internal)",
+            enum=["default", "internal"],
+            default_value="internal",
+            optional=False,
+        ),
         Attr(name="parameters", kind="JSON", description="GraphQL query parameters for the group", optional=True),
     ],
     relationships=[
@@ -146,6 +174,14 @@ core_repository_group = NodeSchema(
     inherit_from=[InfrahubKind.GENERICGROUP],
     generate_profile=False,
     attributes=[
+        Attr(
+            name="group_type",
+            kind="Text",
+            description="Type of group (default or internal)",
+            enum=["default", "internal"],
+            default_value="internal",
+            optional=False,
+        ),
         Attr(
             name="content",
             kind="Dropdown",
